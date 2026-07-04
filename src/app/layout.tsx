@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { PWARegister } from "@/components/PWARegister";
+import { Splash } from "@/components/Splash";
 
 export const metadata: Metadata = {
   applicationName: "Medical AI Assistant",
@@ -36,6 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
+        <Splash />
         {children}
         <PWARegister />
       </body>

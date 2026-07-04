@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/useSession";
 import { Orb } from "@/components/Orb";
+import { InstallButton } from "@/components/InstallButton";
 import { ArrowRightIcon } from "@/components/icons";
 
 export default function WelcomePage() {
@@ -63,6 +64,7 @@ export default function WelcomePage() {
             </p>
           </>
         )}
+        <InstallButton />
         <p className="mt-6 text-[11px] leading-relaxed text-slate-400">
           Informational only — not a diagnosis or prescription. In an emergency, call your
           local emergency number.

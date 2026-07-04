@@ -3,17 +3,31 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/useSession";
+import { useCredits } from "@/lib/useCredits";
 import { Orb } from "@/components/Orb";
 import { BottomNav } from "@/components/BottomNav";
-import { BellIcon, PaperclipIcon, SparkleIcon } from "@/components/icons";
+import {
+  BellIcon,
+  PaperclipIcon,
+  SparkleIcon,
+  StethoscopeIcon,
+  FlaskIcon,
+  PillIcon,
+  SearchIcon,
+} from "@/components/icons";
 
-type Category = { label: string; emoji: string; tint: string; ask: string; tag: string };
+type Category = {
+  label: string;
+  Icon: (p: { className?: string }) => JSX.Element;
+  tint: string;
+  ask: string;
+};
 
 const CATEGORIES: Category[] = [
-  { label: "Symptom Check", emoji: "🩺", tint: "from-violet-500 to-purple-500", tag: "Symptoms", ask: "I'd like to check some symptoms I'm having." },
-  { label: "Lab Results", emoji: "🧪", tint: "from-sky-500 to-blue-500", tag: "Labs", ask: "Help me understand my lab results — I'll upload a photo." },
-  { label: "Medications", emoji: "💊", tint: "from-pink-500 to-rose-500", tag: "Meds", ask: "Help me set up a schedule for my medications." },
-  { label: "Find Care", emoji: "🔎", tint: "from-orange-500 to-amber-500", tag: "Care", ask: "Help me figure out what kind of care I should seek." },
+  { label: "Symptom Check", Icon: StethoscopeIcon, tint: "from-violet-500 to-purple-500", ask: "I'd like to check some symptoms I'm having." },
+  { label: "Lab Results", Icon: FlaskIcon, tint: "from-sky-500 to-blue-500", ask: "Help me understand my lab results — I'll upload a photo." },
+  { label: "Medications", Icon: PillIcon, tint: "from-pink-500 to-rose-500", ask: "Help me set up a schedule for my medications." },
+  { label: "Find Care", Icon: SearchIcon, tint: "from-orange-500 to-amber-500", ask: "Help me figure out what kind of care I should seek." },
 ];
 
 const HISTORY = [
@@ -27,7 +41,8 @@ const FILTERS = ["All", "Symptoms", "Labs", "Meds", "Care"];
 
 export default function HomePage() {
   const router = useRouter();
-  const { session, configured } = useSession();
+  const { session } = useSession();
+  const { credits } = useCredits();
   const [filter, setFilter] = useState("All");
 
   const name =
@@ -38,18 +53,18 @@ export default function HomePage() {
   const goChat = (ask?: string) =>
     router.push(ask ? `/chat?ask=${encodeURIComponent(ask)}` : "/chat");
 
-  const historyShown =
-    filter === "All" ? HISTORY : HISTORY.filter((h) => h.tag === filter);
+  const historyShown = filter === "All" ? HISTORY : HISTORY.filter((h) => h.tag === filter);
+  const creditLabel = credits ?? 24;
 
   return (
-    <div className="mx-auto min-h-[100dvh] w-full max-w-md px-5 pb-40 pt-8">
+    <div className="mx-auto min-h-[100dvh] w-full max-w-3xl px-5 pb-44 pt-8 md:px-8 md:pt-12">
       {/* Greeting */}
       <header className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 md:text-3xl">
             Hi, {name}
           </h1>
-          <p className="text-sm text-slate-500">How can I help you today?</p>
+          <p className="text-sm text-slate-500 md:text-base">How can I help you today?</p>
         </div>
         <button className="glass relative grid h-11 w-11 place-items-center rounded-full text-slate-600">
           <BellIcon />
@@ -58,47 +73,47 @@ export default function HomePage() {
       </header>
 
       {/* Pro / hero card */}
-      <button
-        onClick={() => goChat()}
-        className="glass mb-5 flex w-full items-center gap-4 overflow-hidden rounded-3xl p-4 text-left"
-      >
-        <div className="animate-float shrink-0">
-          <Orb size={92} />
-        </div>
+      <div className="glass mb-6 flex items-center gap-4 overflow-hidden rounded-3xl p-5 md:p-6">
+        <button onClick={() => goChat()} className="animate-float shrink-0" aria-label="Open chat">
+          <Orb size={96} />
+        </button>
         <div className="min-w-0 flex-1">
           <span className="mb-2 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold text-violet-700">
-            <SparkleIcon className="h-3 w-3" /> Unlimited with Pro
+            <SparkleIcon className="h-3 w-3" /> {creditLabel} messages left
           </span>
-          <p className="text-[17px] font-bold leading-snug text-slate-800">
+          <p className="text-[17px] font-bold leading-snug text-slate-800 md:text-xl">
             Use AI at full power
           </p>
-          <span className="mt-2 inline-block rounded-full border border-violet-300 px-4 py-1.5 text-xs font-semibold text-violet-600">
-            Get started
-          </span>
+          <button
+            onClick={() => router.push("/pricing")}
+            className="mt-2 inline-block rounded-full border border-violet-300 px-4 py-1.5 text-xs font-semibold text-violet-600 transition hover:bg-violet-50"
+          >
+            Upgrade plan
+          </button>
         </div>
-      </button>
+      </div>
 
       {/* Categories */}
-      <div className="mb-6 flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {CATEGORIES.map((c) => (
+      <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-4">
+        {CATEGORIES.map(({ label, Icon, tint, ask }) => (
           <button
-            key={c.label}
-            onClick={() => goChat(c.ask)}
-            className="glass flex w-32 shrink-0 flex-col gap-4 rounded-3xl p-4 text-left"
+            key={label}
+            onClick={() => goChat(ask)}
+            className="glass flex flex-col gap-4 rounded-3xl p-4 text-left transition hover:bg-white/70"
           >
             <span
-              className={`grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br ${c.tint} text-xl shadow-md`}
+              className={`grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br ${tint} text-white shadow-md`}
             >
-              {c.emoji}
+              <Icon className="h-6 w-6" />
             </span>
-            <span className="text-sm font-semibold text-slate-800">{c.label}</span>
+            <span className="text-sm font-semibold text-slate-800">{label}</span>
           </button>
         ))}
       </div>
 
       {/* History */}
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-lg font-bold text-slate-900">History</h2>
+        <h2 className="text-lg font-bold text-slate-900 md:text-xl">History</h2>
         <button className="text-sm font-medium text-violet-600">View all</button>
       </div>
 
@@ -118,12 +133,12 @@ export default function HomePage() {
         ))}
       </div>
 
-      <div className="flex flex-col gap-2.5">
+      <div className="grid gap-2.5 md:grid-cols-2">
         {historyShown.map((h) => (
           <button
             key={h.title}
             onClick={() => goChat(h.preview)}
-            className="glass rounded-2xl px-4 py-3 text-left"
+            className="glass rounded-2xl px-4 py-3 text-left transition hover:bg-white/70"
           >
             <p className="text-sm font-semibold text-slate-800">{h.title}</p>
             <p className="truncate text-xs text-slate-500">{h.preview}</p>
@@ -137,12 +152,12 @@ export default function HomePage() {
       {/* Quick message bar */}
       <button
         onClick={() => goChat()}
-        className="glass-strong fixed inset-x-0 bottom-24 mx-auto flex w-[min(100%-2.5rem,24rem)] items-center gap-3 rounded-full px-4 py-3 text-left shadow-lg"
+        className="glass-strong fixed inset-x-0 bottom-24 z-30 mx-auto flex w-[min(100%-2.5rem,28rem)] items-center gap-3 rounded-full px-4 py-3 text-left shadow-lg"
       >
         <PaperclipIcon className="h-5 w-5 text-slate-400" />
         <span className="flex-1 text-sm text-slate-400">Message…</span>
         <span className="flex items-center gap-1 text-sm font-semibold text-violet-600">
-          <SparkleIcon className="h-4 w-4" /> 24
+          <SparkleIcon className="h-4 w-4" /> {creditLabel}
         </span>
       </button>
 

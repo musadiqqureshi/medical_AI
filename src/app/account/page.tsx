@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/useSession";
+import { useCredits } from "@/lib/useCredits";
 import { supabase } from "@/lib/supabase";
 import { Orb } from "@/components/Orb";
 import { BottomNav } from "@/components/BottomNav";
@@ -10,6 +11,7 @@ import { LogoutIcon, SparkleIcon } from "@/components/icons";
 export default function AccountPage() {
   const router = useRouter();
   const { session, configured } = useSession();
+  const { credits, plan } = useCredits();
 
   const name =
     (session?.user?.user_metadata?.full_name as string) ||
@@ -40,11 +42,16 @@ export default function AccountPage() {
             <SparkleIcon className="h-5 w-5" />
           </span>
           <div>
-            <p className="text-sm font-semibold text-slate-800">Free plan</p>
-            <p className="text-xs text-slate-500">24 requests left today</p>
+            <p className="text-sm font-semibold capitalize text-slate-800">{plan} plan</p>
+            <p className="text-xs text-slate-500">
+              {credits ?? "—"} messages left
+            </p>
           </div>
         </div>
-        <button className="rounded-full border border-violet-300 px-4 py-1.5 text-xs font-semibold text-violet-600">
+        <button
+          onClick={() => router.push("/pricing")}
+          className="rounded-full border border-violet-300 px-4 py-1.5 text-xs font-semibold text-violet-600"
+        >
           Upgrade
         </button>
       </div>

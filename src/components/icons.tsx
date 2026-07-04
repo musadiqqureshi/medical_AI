@@ -142,3 +142,49 @@ export function BookmarkIcon({ className = "h-5 w-5" }: P) {
     </svg>
   );
 }
+
+export function StethoscopeIcon({ className = "h-5 w-5" }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 3v5a4 4 0 0 0 8 0V3" />
+      <path d="M8 15a5 5 0 0 0 5 5 5 5 0 0 0 5-5v-2" />
+      <circle cx="18" cy="10" r="2.5" />
+    </svg>
+  );
+}
+
+export function FlaskIcon({ className = "h-5 w-5" }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 3h6" />
+      <path d="M10 3v6l-5 8.5A2 2 0 0 0 6.7 21h10.6a2 2 0 0 0 1.7-3.5L14 9V3" />
+      <path d="M7.5 15h9" />
+    </svg>
+  );
+}
+
+export function PillIcon({ className = "h-5 w-5" }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2.5" y="8" width="19" height="8" rx="4" transform="rotate(-45 12 12)" />
+      <path d="M8.5 8.5l7 7" />
+    </svg>
+  );
+}
+
+export function SearchIcon({ className = "h-5 w-5" }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="7" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
+export function CheckIcon({ className = "h-5 w-5" }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}

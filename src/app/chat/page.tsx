@@ -4,8 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getAssistant, type Assistant } from "@/lib/assistants";
 import { useSession } from "@/lib/useSession";
+import { useCredits } from "@/lib/useCredits";
+import { supabase } from "@/lib/supabase";
 import { Orb } from "@/components/Orb";
 import { VoiceMessage } from "@/components/VoiceMessage";
+import { Markdown } from "@/components/Markdown";
 import {
   PaperclipIcon,
   MicIcon,
@@ -36,6 +39,7 @@ const now = () =>
 export default function ChatPage() {
   const router = useRouter();
   const { loading: authLoading, session, configured } = useSession();
+  const { credits, refresh: refreshCredits } = useCredits();
   const assistant = getAssistant("medical") as Assistant;
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -130,13 +134,22 @@ export default function ChatPage() {
     setLoading(true);
 
     const wire = history.map((m) => ({ role: m.role, content: toWireContent(m) }));
+    const accessToken = supabase
+      ? (await supabase.auth.getSession()).data.session?.access_token
+      : undefined;
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assistantId: assistant.id, messages: wire }),
+        body: JSON.stringify({ assistantId: assistant.id, messages: wire, accessToken }),
       });
+      if (res.status === 402) {
+        setMessages((prev) => prev.filter((m, i) => !(i === prev.length - 1 && m.content === "")));
+        setError("You're out of credits. Upgrade your plan to keep chatting.");
+        router.push("/pricing");
+        return;
+      }
       if (!res.ok || !res.body) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || `Request failed (${res.status})`);
@@ -160,13 +173,16 @@ export default function ChatPage() {
       setMessages((prev) => prev.filter((m, i) => !(i === prev.length - 1 && m.content === "")));
     } finally {
       setLoading(false);
+      refreshCredits();
     }
   }
 
   if (configured && !session && !authLoading) return null;
 
+  const creditLabel = credits ?? 24;
+
   return (
-    <div className="mx-auto flex h-[100dvh] w-full max-w-md flex-col">
+    <div className="mx-auto flex h-[100dvh] w-full max-w-2xl flex-col">
       {/* Header */}
       <header className="flex items-center gap-3 px-4 pb-3 pt-6">
         <button
@@ -289,7 +305,7 @@ export default function ChatPage() {
               className="max-h-32 flex-1 resize-none bg-transparent py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
             />
             <span className="flex shrink-0 items-center gap-1 pr-1 text-sm font-semibold text-violet-600">
-              <SparkleIcon className="h-4 w-4" /> 24
+              <SparkleIcon className="h-4 w-4" /> {creditLabel}
             </span>
           </div>
 
@@ -361,12 +377,8 @@ function AssistantBubble({ m, loading }: { m: Message; loading: boolean }) {
           <span className="text-xs font-semibold text-slate-700">AI Assistant</span>
           <span className="text-[10px] text-slate-400">{m.time}</span>
         </div>
-        <div className="max-w-[92%] rounded-3xl rounded-tl-md bg-violet-50/80 px-4 py-3 text-[14px] leading-relaxed text-slate-800 shadow-sm">
-          {m.content ? (
-            <span className="whitespace-pre-wrap">{m.content}</span>
-          ) : loading ? (
-            <Dots />
-          ) : null}
+        <div className="max-w-[92%] rounded-3xl rounded-tl-md bg-violet-50/80 px-4 py-3 text-slate-800 shadow-sm">
+          {m.content ? <Markdown>{m.content}</Markdown> : loading ? <Dots /> : null}
         </div>
         {m.content && !loading && (
           <div className="mt-2 max-w-[92%]">

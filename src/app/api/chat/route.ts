@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   const baseUrl = process.env.LLM_BASE_URL || "https://openrouter.ai/api/v1";
   const model = process.env.LLM_MODEL || "anthropic/claude-sonnet-4.6";
 
-  let body: { assistantId?: string; messages?: ClientMessage[] };
+  let body: { assistantId?: string; messages?: ClientMessage[]; accessToken?: string };
   try {
     body = await req.json();
   } catch {
@@ -43,6 +43,33 @@ export async function POST(req: NextRequest) {
           ? "⚠️ **This may be a medical emergency.** Based on what you described, please **call your local emergency number (e.g. 911 / 112 / 999) or go to the nearest emergency department right now.** If you are having thoughts of harming yourself, please contact a crisis line immediately — in the US call or text **988**. I'm an information tool and can't help in an emergency, but real help is available right now."
           : "⚠️ **Please be careful.** What you described could be serious. Stop any activity and seek appropriate professional or emergency help right away rather than relying on this tool.";
       return streamStaticText(notice);
+    }
+  }
+
+  // ---- Credits: spend one credit for a signed-in user (skipped in dev when
+  // Supabase isn't configured or the user isn't authenticated).
+  const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supaKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (supaUrl && supaKey && body.accessToken) {
+    try {
+      const r = await fetch(`${supaUrl}/rest/v1/rpc/deduct_credit`, {
+        method: "POST",
+        headers: {
+          apikey: supaKey,
+          Authorization: `Bearer ${body.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: "{}",
+      });
+      if (r.ok) {
+        const remaining = Number(await r.text());
+        if (remaining < 0) {
+          return json({ error: "You're out of credits.", code: "no_credits" }, 402);
+        }
+      }
+      // If the RPC isn't set up yet (non-OK), fail open so chat still works.
+    } catch {
+      // Network issue reaching Supabase — fail open rather than block chat.
     }
   }
 

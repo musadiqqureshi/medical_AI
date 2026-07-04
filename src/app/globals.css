@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --brand-1: #7c6cf0; /* violet */
+  --brand-2: #a855f7; /* purple */
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  color: #1e1b2e;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto,
+    system-ui, sans-serif;
+  /* Soft, light lavender ambient backdrop (iOS-style) */
+  background:
+    radial-gradient(48rem 48rem at 8% -8%, rgba(168, 85, 247, 0.14), transparent 60%),
+    radial-gradient(42rem 42rem at 100% 0%, rgba(99, 102, 241, 0.12), transparent 55%),
+    radial-gradient(46rem 46rem at 60% 118%, rgba(236, 72, 153, 0.10), transparent 60%),
+    linear-gradient(180deg, #f6f5fb 0%, #eeecf7 100%);
+  background-attachment: fixed;
+}
+
+/* Frosted glass surfaces */
+.glass {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 12px 34px -14px rgba(76, 29, 149, 0.25);
+}
+
+.glass-strong {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.brand-gradient {
+  background-image: linear-gradient(135deg, #7c6cf0 0%, #a855f7 55%, #ec4899 100%);
+}
+
+.brand-text {
+  background-image: linear-gradient(135deg, #7c6cf0 0%, #a855f7 60%, #ec4899 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Multicolor assistant "orb" mascot */
+.orb {
+  border-radius: 9999px;
+  background:
+    radial-gradient(closest-side at 32% 30%, #f9a8d4, transparent 70%),
+    radial-gradient(closest-side at 72% 34%, #818cf8, transparent 70%),
+    radial-gradient(closest-side at 68% 74%, #fb923c, transparent 72%),
+    radial-gradient(closest-side at 30% 72%, #c084fc, transparent 72%),
+    linear-gradient(135deg, #a78bfa, #f0abfc);
+  box-shadow: 0 20px 50px -18px rgba(124, 58, 237, 0.55);
+}
+
+/* Thin, subtle scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(124, 108, 240, 0.35) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(124, 108, 240, 0.3);
+  border-radius: 9999px;
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+.animate-float {
+  animation: float-slow 5s ease-in-out infinite;
+}

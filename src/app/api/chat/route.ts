@@ -14,16 +14,8 @@ type ClientMessage = {
 };
 
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.LLM_API_KEY;
   const baseUrl = process.env.LLM_BASE_URL || "https://openrouter.ai/api/v1";
   const model = process.env.LLM_MODEL || "anthropic/claude-sonnet-4.6";
-
-  if (!apiKey) {
-    return json(
-      { error: "Server is missing LLM_API_KEY. Copy .env.local.example to .env.local and add your key." },
-      500,
-    );
-  }
 
   let body: { assistantId?: string; messages?: ClientMessage[] };
   try {
@@ -40,7 +32,8 @@ export async function POST(req: NextRequest) {
   );
   if (messages.length === 0) return json({ error: "No messages provided." }, 400);
 
-  // ---- Safety layer: intercept emergency red-flags before hitting the model.
+  // ---- Safety layer: intercept emergency red-flags before anything else,
+  // so this works even if the model provider isn't configured yet.
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
   if (lastUser) {
     const flags = detectRedFlags(assistant, extractText(lastUser.content));
@@ -51,6 +44,14 @@ export async function POST(req: NextRequest) {
           : "⚠️ **Please be careful.** What you described could be serious. Stop any activity and seek appropriate professional or emergency help right away rather than relying on this tool.";
       return streamStaticText(notice);
     }
+  }
+
+  const apiKey = process.env.LLM_API_KEY;
+  if (!apiKey) {
+    return json(
+      { error: "Server is missing LLM_API_KEY. Copy .env.local.example to .env.local and add your key." },
+      500,
+    );
   }
 
   const payloadMessages = [

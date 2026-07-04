@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { assistants, type Assistant } from "@/lib/assistants";
+import { getAssistant, type Assistant } from "@/lib/assistants";
 import { useSession } from "@/lib/useSession";
-import { supabase } from "@/lib/supabase";
 import { Orb } from "@/components/Orb";
+import { VoiceMessage } from "@/components/VoiceMessage";
 import {
   PaperclipIcon,
   MicIcon,
@@ -13,34 +13,32 @@ import {
   StopIcon,
   CloseIcon,
   FileIcon,
-  LogoutIcon,
+  ArrowLeftIcon,
+  BookmarkIcon,
+  SparkleIcon,
 } from "@/components/icons";
 
-type Attachment = {
-  kind: "image" | "file";
-  name: string;
-  dataUrl?: string;
-  text?: string;
-};
-
+type Attachment = { kind: "image" | "file"; name: string; dataUrl?: string; text?: string };
 type Message = {
   role: "user" | "assistant";
   content: string;
   attachments?: Attachment[];
+  time: string;
 };
-
 type ContentPart =
   | { type: "text"; text: string }
   | { type: "image_url"; image_url: { url: string } };
 
 const TEXT_FILE_RE = /\.(txt|md|markdown|csv|json|log)$/i;
+const now = () =>
+  new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).toLowerCase();
 
 export default function ChatPage() {
   const router = useRouter();
   const { loading: authLoading, session, configured } = useSession();
+  const assistant = getAssistant("medical") as Assistant;
 
-  const [activeId, setActiveId] = useState<string>("medical");
-  const [threads, setThreads] = useState<Record<string, Message[]>>({});
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState<Attachment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -52,33 +50,22 @@ export default function ChatPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
 
-  const active = assistants.find((a) => a.id === activeId) as Assistant;
-  const messages = threads[activeId] || [];
   const canSend = input.trim().length > 0 || pending.length > 0;
 
-  // Gate: if Supabase is configured and there's no session, go to /login.
   useEffect(() => {
     if (!authLoading && configured && !session) router.replace("/login");
   }, [authLoading, configured, session, router]);
 
   useEffect(() => {
-    setVoiceSupported(
-      "SpeechRecognition" in window || "webkitSpeechRecognition" in window,
-    );
+    setVoiceSupported("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
+    // Prefill from a Home category/history tap (?ask=...)
+    const ask = new URLSearchParams(window.location.search).get("ask");
+    if (ask) setInput(ask);
   }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
-
-  function setMessages(updater: (prev: Message[]) => Message[]) {
-    setThreads((t) => ({ ...t, [activeId]: updater(t[activeId] || []) }));
-  }
-
-  async function signOut() {
-    await supabase?.auth.signOut();
-    router.replace("/");
-  }
 
   // ---- Attachments -------------------------------------------------------
   async function onFiles(files: FileList | null) {
@@ -94,28 +81,20 @@ export default function ChatPage() {
       } else if (TEXT_FILE_RE.test(file.name) || file.type.startsWith("text/")) {
         next.push({ kind: "file", name: file.name, text: await readAsText(file) });
       } else {
-        setError(
-          `"${file.name}" can't be read directly. For PDFs or scans, upload a photo/screenshot instead.`,
-        );
+        setError(`"${file.name}" can't be read. Upload a photo/screenshot instead.`);
       }
     }
     if (next.length) setPending((p) => [...p, ...next]);
     if (fileRef.current) fileRef.current.value = "";
   }
 
-  function removePending(i: number) {
-    setPending((p) => p.filter((_, idx) => idx !== i));
-  }
+  const removePending = (i: number) => setPending((p) => p.filter((_, idx) => idx !== i));
 
-  // ---- Voice input -------------------------------------------------------
+  // ---- Voice-to-text input ----------------------------------------------
   function toggleVoice() {
     if (!voiceSupported) return;
-    if (listening) {
-      recognitionRef.current?.stop();
-      return;
-    }
-    const SR: any =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (listening) return recognitionRef.current?.stop();
+    const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const rec = new SR();
     rec.lang = "en-US";
     rec.interimResults = true;
@@ -146,10 +125,8 @@ export default function ChatPage() {
     setPending([]);
     if (listening) recognitionRef.current?.stop();
 
-    const userMsg: Message = { role: "user", content, attachments };
-    const history = [...messages, userMsg];
-    setMessages(() => history);
-    setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+    const history = [...messages, { role: "user" as const, content, attachments, time: now() }];
+    setMessages([...history, { role: "assistant", content: "", time: now() }]);
     setLoading(true);
 
     const wire = history.map((m) => ({ role: m.role, content: toWireContent(m) }));
@@ -158,7 +135,7 @@ export default function ChatPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assistantId: activeId, messages: wire }),
+        body: JSON.stringify({ assistantId: assistant.id, messages: wire }),
       });
       if (!res.ok || !res.body) {
         const data = await res.json().catch(() => ({}));
@@ -174,7 +151,7 @@ export default function ChatPage() {
         acc += decoder.decode(value, { stream: true });
         setMessages((prev) => {
           const nextArr = [...prev];
-          nextArr[nextArr.length - 1] = { role: "assistant", content: acc };
+          nextArr[nextArr.length - 1] = { ...nextArr[nextArr.length - 1], content: acc };
           return nextArr;
         });
       }
@@ -186,233 +163,118 @@ export default function ChatPage() {
     }
   }
 
-  // Avoid flashing chat before the auth redirect resolves.
   if (configured && !session && !authLoading) return null;
 
-  const userName =
-    (session?.user?.user_metadata?.full_name as string) ||
-    session?.user?.email?.split("@")[0] ||
-    "there";
-
   return (
-    <div className="flex h-[100dvh] p-0 md:gap-4 md:p-4">
-      {/* Sidebar */}
-      <aside className="glass hidden w-72 shrink-0 flex-col rounded-3xl p-4 md:flex">
-        <div className="mb-6 flex items-center gap-3 px-2 pt-1">
-          <div className="brand-gradient grid h-10 w-10 place-items-center rounded-2xl text-lg shadow-lg">
-            🩺
-          </div>
-          <div>
-            <h1 className="text-[15px] font-semibold leading-tight text-slate-800">Medical AI</h1>
-            <p className="text-[11px] text-slate-500">Care navigation suite</p>
-          </div>
-        </div>
-        <nav className="flex flex-col gap-1">
-          {assistants.map((a) => (
-            <button
-              key={a.id}
-              onClick={() => setActiveId(a.id)}
-              className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition ${
-                a.id === activeId
-                  ? "glass-strong text-slate-900 shadow-sm"
-                  : "text-slate-600 hover:bg-white/50"
-              }`}
-            >
-              <span className="text-lg">{a.emoji}</span>
-              <span className="flex-1 text-[13px] font-medium leading-tight">{a.name}</span>
-            </button>
-          ))}
-        </nav>
-        <div className="mt-auto space-y-3 px-1 pt-4">
-          {configured && session && (
-            <div className="flex items-center justify-between rounded-2xl bg-white/50 px-3 py-2">
-              <div className="min-w-0">
-                <p className="truncate text-[13px] font-medium text-slate-700">{userName}</p>
-                <p className="truncate text-[11px] text-slate-400">
-                  {session.user.email}
-                </p>
-              </div>
-              <button
-                onClick={signOut}
-                title="Sign out"
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-xl text-slate-500 hover:bg-white/70"
-              >
-                <LogoutIcon />
-              </button>
+    <div className="mx-auto flex h-[100dvh] w-full max-w-md flex-col">
+      {/* Header */}
+      <header className="flex items-center gap-3 px-4 pb-3 pt-6">
+        <button
+          onClick={() => router.push("/home")}
+          className="glass grid h-10 w-10 place-items-center rounded-full text-slate-600"
+          aria-label="Back"
+        >
+          <ArrowLeftIcon />
+        </button>
+        <h1 className="flex-1 text-center text-lg font-bold text-slate-900">Medical AI</h1>
+        <button className="glass grid h-10 w-10 place-items-center rounded-full text-amber-500" aria-label="Saved">
+          <BookmarkIcon />
+        </button>
+      </header>
+
+      <div className="px-5 pb-1 text-center text-[10px] font-medium text-amber-600">
+        {assistant.disclaimer}
+      </div>
+
+      {/* Messages */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
+        {messages.length === 0 && (
+          <div className="mt-6 flex flex-col items-center text-center">
+            <div className="animate-float mb-5">
+              <Orb size={112} />
             </div>
-          )}
-          <p className="px-1 text-[11px] leading-relaxed text-slate-400">
-            Educational tool. Not a substitute for professional medical advice.
-          </p>
-        </div>
-      </aside>
-
-      {/* Main */}
-      <main className="glass flex min-w-0 flex-1 flex-col overflow-hidden rounded-none md:rounded-3xl">
-        {/* Header */}
-        <header className="glass-strong flex items-center gap-3 border-b border-white/40 px-4 py-3 md:px-5 md:py-4">
-          <div
-            className={`grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br ${active.accent} text-xl text-white shadow-lg`}
-          >
-            {active.emoji}
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate font-semibold text-slate-800">{active.name}</h2>
-            <p className="truncate text-xs text-slate-500">{active.tagline}</p>
-          </div>
-          {/* Mobile: assistant switcher + sign out */}
-          <div className="flex items-center gap-2 md:hidden">
-            <select
-              value={activeId}
-              onChange={(e) => setActiveId(e.target.value)}
-              className="max-w-[8rem] rounded-xl border border-white/60 bg-white/60 px-2 py-1.5 text-xs text-slate-700"
-            >
-              {assistants.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.emoji} {a.name}
-                </option>
-              ))}
-            </select>
-            {configured && session && (
-              <button
-                onClick={signOut}
-                title="Sign out"
-                className="grid h-9 w-9 place-items-center rounded-xl text-slate-500 hover:bg-white/70"
-              >
-                <LogoutIcon />
-              </button>
-            )}
-          </div>
-        </header>
-
-        <div className="bg-amber-400/15 px-5 py-2 text-center text-[11px] font-medium text-amber-700">
-          {active.disclaimer}
-        </div>
-
-        {/* Messages */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6">
-          <div className="mx-auto flex max-w-3xl flex-col gap-4">
-            {messages.length === 0 && (
-              <div className="mt-4 flex flex-col items-center text-center">
-                <div className="animate-float mb-5">
-                  <Orb size={104} />
-                </div>
-                <p className="mb-1 text-lg font-semibold text-slate-800">
-                  Hi {userName}, how can I help today?
-                </p>
-                <p className="mb-6 text-sm text-slate-500">
-                  Describe symptoms, upload a lab report photo, or use the mic.
-                </p>
-                <div className="grid w-full max-w-xl gap-2 sm:grid-cols-2">
-                  {active.starters.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => send(s, [])}
-                      className="glass rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-white/70"
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {messages.map((m, i) => (
-              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[85%] rounded-3xl px-4 py-3 text-[14px] leading-relaxed shadow-sm ${
-                    m.role === "user"
-                      ? `bg-gradient-to-br ${active.accent} text-white`
-                      : "glass-strong text-slate-800"
-                  }`}
+            <p className="mb-1 text-lg font-semibold text-slate-800">How can I help today?</p>
+            <p className="mb-6 text-sm text-slate-500">
+              Describe symptoms, upload a lab report, or tap the mic.
+            </p>
+            <div className="grid w-full gap-2">
+              {assistant.starters.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => send(s, [])}
+                  className="glass rounded-2xl px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-white/70"
                 >
-                  {m.attachments && m.attachments.length > 0 && (
-                    <div className="mb-2 flex flex-wrap gap-2">
-                      {m.attachments.map((att, ai) =>
-                        att.kind === "image" ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            key={ai}
-                            src={att.dataUrl}
-                            alt={att.name}
-                            className="h-24 w-24 rounded-xl object-cover ring-1 ring-white/40"
-                          />
-                        ) : (
-                          <span
-                            key={ai}
-                            className="inline-flex items-center gap-1 rounded-lg bg-black/10 px-2 py-1 text-xs"
-                          >
-                            <FileIcon className="h-3.5 w-3.5" /> {att.name}
-                          </span>
-                        ),
-                      )}
-                    </div>
-                  )}
-                  {m.content ? (
-                    <span className="whitespace-pre-wrap">{m.content}</span>
-                  ) : loading && i === messages.length - 1 ? (
-                    <Dots />
-                  ) : null}
-                </div>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-4">
+          {messages.map((m, i) =>
+            m.role === "user" ? (
+              <UserBubble key={i} m={m} />
+            ) : (
+              <AssistantBubble key={i} m={m} loading={loading && i === messages.length - 1} />
+            ),
+          )}
+        </div>
+      </div>
+
+      {error && <div className="px-5 pb-1 text-center text-xs text-red-500">{error}</div>}
+
+      {/* Composer */}
+      <div className="px-4 pb-6 pt-2">
+        {pending.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {pending.map((att, i) => (
+              <div key={i} className="glass relative rounded-xl p-1">
+                {att.kind === "image" ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={att.dataUrl} alt={att.name} className="h-14 w-14 rounded-lg object-cover" />
+                ) : (
+                  <span className="flex h-14 items-center gap-1 px-2 text-xs text-slate-600">
+                    <FileIcon /> {att.name}
+                  </span>
+                )}
+                <button
+                  onClick={() => removePending(i)}
+                  className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-slate-800 text-white"
+                  aria-label="Remove"
+                >
+                  <CloseIcon className="h-3 w-3" />
+                </button>
               </div>
             ))}
           </div>
-        </div>
-
-        {error && (
-          <div className="mx-auto mb-1 max-w-3xl px-4 text-center text-xs text-red-500">{error}</div>
         )}
 
-        {/* Composer */}
-        <div className="px-3 pb-3 pt-2 md:px-4 md:pb-4">
-          {pending.length > 0 && (
-            <div className="mx-auto mb-2 flex max-w-3xl flex-wrap gap-2 px-1">
-              {pending.map((att, i) => (
-                <div key={i} className="glass relative rounded-xl p-1">
-                  {att.kind === "image" ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={att.dataUrl} alt={att.name} className="h-14 w-14 rounded-lg object-cover" />
-                  ) : (
-                    <span className="flex h-14 items-center gap-1 px-2 text-xs text-slate-600">
-                      <FileIcon /> {att.name}
-                    </span>
-                  )}
-                  <button
-                    onClick={() => removePending(i)}
-                    className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-slate-800 text-white"
-                    aria-label="Remove attachment"
-                  >
-                    <CloseIcon className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            send(input);
+          }}
+          className="flex items-center gap-2"
+        >
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*,.txt,.md,.csv,.json,.log"
+            multiple
+            className="hidden"
+            onChange={(e) => onFiles(e.target.files)}
+          />
 
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              send(input);
-            }}
-            className="glass-strong mx-auto flex max-w-3xl items-center gap-1 rounded-[1.75rem] p-1.5 pl-2"
-          >
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*,.txt,.md,.csv,.json,.log"
-              multiple
-              className="hidden"
-              onChange={(e) => onFiles(e.target.files)}
-            />
+          <div className="glass-strong flex flex-1 items-center gap-2 rounded-full px-3 py-1.5">
             <button
               type="button"
-              title="Attach image or file"
+              title="Attach"
               onClick={() => fileRef.current?.click()}
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-slate-500 transition hover:bg-white/70 hover:text-violet-600"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-500 hover:text-violet-600"
             >
               <PaperclipIcon />
             </button>
-
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -423,47 +285,95 @@ export default function ChatPage() {
                 }
               }}
               rows={1}
-              placeholder={listening ? "Listening…" : "Describe your symptoms…"}
-              className="max-h-40 flex-1 resize-none bg-transparent px-1 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
+              placeholder={listening ? "Listening…" : "Message…"}
+              className="max-h-32 flex-1 resize-none bg-transparent py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
             />
+            <span className="flex shrink-0 items-center gap-1 pr-1 text-sm font-semibold text-violet-600">
+              <SparkleIcon className="h-4 w-4" /> 24
+            </span>
+          </div>
 
-            {/* One primary circular button: Send when there's input, else Mic (voice). */}
-            {canSend ? (
-              <button
-                type="submit"
-                disabled={loading}
-                className="brand-gradient grid h-11 w-11 shrink-0 place-items-center rounded-full text-white shadow-md shadow-violet-500/30 transition active:scale-95 disabled:opacity-50"
-                aria-label="Send"
-              >
-                <SendIcon />
-              </button>
-            ) : voiceSupported ? (
-              <button
-                type="button"
-                onClick={toggleVoice}
-                className={`grid h-11 w-11 shrink-0 place-items-center rounded-full text-white shadow-md transition active:scale-95 ${
-                  listening ? "animate-pulse bg-red-500 shadow-red-500/30" : "brand-gradient shadow-violet-500/30"
-                }`}
-                aria-label={listening ? "Stop listening" : "Voice input"}
-              >
-                {listening ? <StopIcon /> : <MicIcon />}
-              </button>
+          {/* Circular mic / send button (mockup style) */}
+          {canSend ? (
+            <button
+              type="submit"
+              disabled={loading}
+              className="brand-gradient grid h-12 w-12 shrink-0 place-items-center rounded-full text-white shadow-lg shadow-violet-500/30 transition active:scale-95 disabled:opacity-50"
+              aria-label="Send"
+            >
+              <SendIcon />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={toggleVoice}
+              className={`grid h-12 w-12 shrink-0 place-items-center rounded-full text-white shadow-lg transition active:scale-95 ${
+                listening ? "animate-pulse bg-red-500 shadow-red-500/30" : "brand-gradient shadow-violet-500/30"
+              }`}
+              aria-label={listening ? "Stop" : "Voice"}
+            >
+              {listening ? <StopIcon /> : <MicIcon />}
+            </button>
+          )}
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// --- message bubbles ------------------------------------------------------
+
+function UserBubble({ m }: { m: Message }) {
+  return (
+    <div className="flex flex-col items-end">
+      {m.attachments && m.attachments.length > 0 && (
+        <div className="mb-1.5 flex flex-wrap justify-end gap-2">
+          {m.attachments.map((att, ai) =>
+            att.kind === "image" ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={ai} src={att.dataUrl} alt={att.name} className="h-24 w-24 rounded-2xl object-cover" />
             ) : (
-              <button
-                type="submit"
-                disabled
-                className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-slate-300 text-white"
-                aria-label="Send"
-              >
-                <SendIcon />
-              </button>
-            )}
-          </form>
-          <p className="mx-auto mt-2 max-w-3xl text-center text-[10px] text-slate-400">
-            AI can make mistakes and does not provide diagnosis. Verify important information with a clinician.
-          </p>
+              <span key={ai} className="glass inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-600">
+                <FileIcon className="h-3.5 w-3.5" /> {att.name}
+              </span>
+            ),
+          )}
         </div>
-      </main>
+      )}
+      {m.content && (
+        <div className="max-w-[82%] rounded-3xl rounded-tr-md bg-white px-4 py-3 text-[14px] leading-relaxed text-slate-800 shadow-sm">
+          <span className="whitespace-pre-wrap">{m.content}</span>
+        </div>
+      )}
+      <span className="mt-1 pr-1 text-[10px] text-slate-400">{m.time}</span>
+    </div>
+  );
+}
+
+function AssistantBubble({ m, loading }: { m: Message; loading: boolean }) {
+  return (
+    <div className="flex gap-2.5">
+      <div className="mt-0.5 shrink-0">
+        <Orb size={34} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="mb-1 flex items-center gap-2">
+          <span className="text-xs font-semibold text-slate-700">AI Assistant</span>
+          <span className="text-[10px] text-slate-400">{m.time}</span>
+        </div>
+        <div className="max-w-[92%] rounded-3xl rounded-tl-md bg-violet-50/80 px-4 py-3 text-[14px] leading-relaxed text-slate-800 shadow-sm">
+          {m.content ? (
+            <span className="whitespace-pre-wrap">{m.content}</span>
+          ) : loading ? (
+            <Dots />
+          ) : null}
+        </div>
+        {m.content && !loading && (
+          <div className="mt-2 max-w-[92%]">
+            <VoiceMessage text={m.content} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -475,7 +385,6 @@ function toWireContent(m: Message): string | ContentPart[] {
   const images = atts.filter((a) => a.kind === "image" && a.dataUrl);
   const fileTexts = atts.filter((a) => a.kind === "file" && a.text);
   if (images.length === 0 && fileTexts.length === 0) return m.content;
-
   const parts: ContentPart[] = [];
   let text = m.content;
   for (const f of fileTexts) text += `\n\n[Attached file: ${f.name}]\n${f.text}`;
@@ -492,7 +401,6 @@ function readAsDataUrl(file: File): Promise<string> {
     r.readAsDataURL(file);
   });
 }
-
 function readAsText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();

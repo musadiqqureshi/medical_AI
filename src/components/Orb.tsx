@@ -1,5 +1,7 @@
-// The gradient "assistant" mascot orb, with a friendly face.
+// The gradient "assistant" mascot orb, with a friendly blinking face.
 export function Orb({ size = 160, face = true }: { size?: number; face?: boolean }) {
+  const eyeW = size * 0.11;
+  const eyeH = size * 0.2;
   return (
     <div
       className="orb relative grid place-items-center"
@@ -7,26 +9,12 @@ export function Orb({ size = 160, face = true }: { size?: number; face?: boolean
       aria-hidden
     >
       {face && (
-        <div className="flex gap-[10%]" style={{ transform: "translateY(-4%)" }}>
-          <span
-            className="block rounded-full bg-white"
-            style={{
-              width: size * 0.11,
-              height: size * 0.2,
-              borderRadius: "0 0 999px 999px / 0 0 999px 999px",
-              clipPath: "polygon(50% 0, 100% 100%, 0 100%)",
-              WebkitClipPath: "polygon(50% 0, 100% 100%, 0 100%)",
-            }}
-          />
-          <span
-            className="block bg-white"
-            style={{
-              width: size * 0.11,
-              height: size * 0.2,
-              clipPath: "polygon(50% 0, 100% 100%, 0 100%)",
-              WebkitClipPath: "polygon(50% 0, 100% 100%, 0 100%)",
-            }}
-          />
+        <div
+          className="flex"
+          style={{ gap: size * 0.1, transform: "translateY(-4%)" }}
+        >
+          <span className="orb-eye block" style={{ width: eyeW, height: eyeH }} />
+          <span className="orb-eye block" style={{ width: eyeW, height: eyeH }} />
         </div>
       )}
     </div>

@@ -44,7 +44,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        router.push("/chat");
+        router.push("/home");
       }
     } catch (err: any) {
       setError(err?.message || "Something went wrong.");

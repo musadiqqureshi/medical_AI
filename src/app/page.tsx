@@ -42,7 +42,7 @@ export default function WelcomePage() {
       <div className="w-full max-w-md">
         {signedIn ? (
           <button
-            onClick={() => router.push("/chat")}
+            onClick={() => router.push("/home")}
             className="brand-gradient flex w-full items-center justify-center gap-2 rounded-2xl px-6 py-4 text-base font-semibold text-white shadow-xl shadow-violet-500/30 transition active:scale-[0.99]"
           >
             Continue to app <ArrowRightIcon />
